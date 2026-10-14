@@ -65,9 +65,7 @@ def add_order(user_id: int, items: list):
             session.add(order_item)
 
         session.commit()
-
-        # TODO: ajouter la commande à Redis
-        add_order_to_redis(order_id, user_id, total_amount, items)
+        add_order_to_redis(order_id, user_id, total_amount, order_items_data)
 
         return order_id
 
@@ -87,7 +85,6 @@ def delete_order(order_id: int):
             session.delete(order)
             session.commit()
 
-            # TODO: supprimer la commande à Redis
             delete_order_from_redis(order_id)
             return 1  
         else:
@@ -102,11 +99,27 @@ def delete_order(order_id: int):
 def add_order_to_redis(order_id, user_id, total_amount, items):
     """Insert order to Redis"""
     r = get_redis_conn()
-    print(r)
+    order_data = {
+                        "order_id": order_id,
+                        "user_id": user_id,
+                        "total_amount": total_amount,
+                        "order_items": json.dumps([{"product_id": item['product_id'], "quantity": item['quantity'], "unit_price": item['unit_price']} for item in items])
+                    }
+    result = r.hset(f"order:{order_id}", mapping=order_data)
+    """Add product quantities to Redis"""
+    for item in items:
+        r.incrby(f"product:{item['product_id']}",int(item["quantity"]))
+    print(f"Order {order_id} added to Redis: {result}")
+    return result
 
 def delete_order_from_redis(order_id):
-    """Delete order from Redis"""
-    pass
+    r = get_redis_conn()
+    result = r.delete(f"order:{order_id}")
+    if result == 1:
+        print(f"Order {order_id} deleted from Redis.")
+    else:
+        print(f"Order {order_id} not found in Redis.")
+    return result
 
 def sync_all_orders_to_redis():
     """ Sync orders from MySQL to Redis """
@@ -123,14 +136,14 @@ def sync_all_orders_to_redis():
                     "order_id": order.id,
                     "user_id": order.user_id,
                     "total_amount": order.total_amount,
-                    "order_items": [{"product_id": item.product_id, "quantity": item.quantity, "unit_price": item.unit_price} for item in order.order_items]
+                    "order_items": json.dumps([{"product_id": item.product_id, "quantity": item.quantity, "unit_price": item.unit_price} for item in order.order_items])
                 }
-                r.hset(f"order:{order.id}", mapping={
-                    "order_id": order_data["order_id"],
-                    "user_id": order_data["user_id"],
-                    "total_amount": order_data["total_amount"],
-                    "order_items": json.dumps(order_data["order_items"])
-                })
+                r.hset(f"order:{order.id}", mapping=order_data)
+                """Add product quantities to Redis"""
+                for item in order.order_items:
+                    r.incrby(f"product:{item.product_id}",int(item.quantity))
+            for key in r.scan_iter(match="product:*"):
+                print(key, r.get(key), flush=True)
             rows_added = len(orders_from_mysql)
         else:
             print('Redis already contains orders, no need to sync!')

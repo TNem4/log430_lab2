@@ -6,6 +6,7 @@ Auteurs : Gabriel C. Ullmann, Fabio Petrillo, 2025
 import os
 from urllib.parse import parse_qs
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from db import get_redis_conn
 from views.template_view import show_main_menu, show_404_page
 from views.user_view import show_user_form, register_user, remove_user
 from views.product_view import show_product_form, register_product, remove_product
@@ -94,8 +95,16 @@ class StoreManager(BaseHTTPRequestHandler):
         self.wfile.write(html.encode("utf-8"))
 
 if __name__ == "__main__":
+    r = get_redis_conn()
+    """ Clear Redis cache on server startup to ensure data consistency with MySQL """
+    keys = list(r.scan_iter(match="order:*"))
+    if keys:
+        r.delete(*keys)
+    product_keys = list(r.scan_iter(match="product:*"))
+    if product_keys:
+        r.delete(*product_keys)
     sync_all_orders_to_redis()  # Sync orders from MySQL to Redis on server startup
-    
+
     server = HTTPServer(("0.0.0.0", 5000), StoreManager)
     print("Server running on http://0.0.0.0:5000")
     server.serve_forever()

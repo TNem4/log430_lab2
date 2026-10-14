@@ -8,6 +8,7 @@ import traceback
 from commands.write_order import add_order, delete_order, sync_all_orders_to_redis
 from queries.read_order import get_orders_from_mysql, get_orders_from_redis
 
+
 def create_order(user_id, items):
     """Create order, use WriteOrder model"""
     try:
@@ -15,7 +16,7 @@ def create_order(user_id, items):
     except ValueError as e:
         return str(e)
     except Exception as e:
-        print(e)
+        traceback.print_exc()
         return "Une erreur s'est produite lors de la création de l'enregistrement. Veuillez consulter les logs pour plus d'informations."
 
 def remove_order(order_id):
@@ -23,7 +24,7 @@ def remove_order(order_id):
     try:
         return delete_order(order_id)
     except Exception as e:
-        print(e)
+        traceback.print_exc()
         return "Une erreur s'est produite lors de la supression de l'enregistrement. Veuillez consulter les logs pour plus d'informations."
 
 def list_orders_from_mysql(limit):
