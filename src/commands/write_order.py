@@ -3,6 +3,8 @@ Orders (write-only model)
 SPDX - License - Identifier: LGPL - 3.0 - or -later
 Auteurs : Gabriel C. Ullmann, Fabio Petrillo, 2025
 """
+import json
+
 from models.product import Product
 from models.order_item import OrderItem
 from models.order import Order
@@ -115,10 +117,20 @@ def sync_all_orders_to_redis():
     try:
         if len(orders_in_redis) == 0:
             # mysql
-            orders_from_mysql = []
+            orders_from_mysql = get_orders_from_mysql()
             for order in orders_from_mysql:
-                # TODO: terminez l'implementation
-                print(order)
+                order_data = {
+                    "order_id": order.id,
+                    "user_id": order.user_id,
+                    "total_amount": order.total_amount,
+                    "order_items": [{"product_id": item.product_id, "quantity": item.quantity, "unit_price": item.unit_price} for item in order.order_items]
+                }
+                r.hset(f"order:{order.id}", mapping={
+                    "order_id": order_data["order_id"],
+                    "user_id": order_data["user_id"],
+                    "total_amount": order_data["total_amount"],
+                    "order_items": json.dumps(order_data["order_items"])
+                })
             rows_added = len(orders_from_mysql)
         else:
             print('Redis already contains orders, no need to sync!')

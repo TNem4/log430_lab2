@@ -4,7 +4,10 @@ SPDX - License - Identifier: LGPL - 3.0 - or -later
 Auteurs : Gabriel C. Ullmann, Fabio Petrillo, 2025
 """
 
+import json
+
 from db import get_sqlalchemy_session, get_redis_conn
+from models.order_item import OrderItem
 from sqlalchemy import desc
 from models.order import Order
 
@@ -20,9 +23,28 @@ def get_orders_from_mysql(limit=9999):
 
 def get_orders_from_redis(limit=9999):
     """Get last X orders"""
-    # TODO: écrivez la méthode
-    print(limit)
-    return []
+    r = get_redis_conn()
+
+    keys = list(r.scan_iter(match="order:*"))
+
+    keys.sort(key=lambda x: int(x.split(':')[1]), reverse=True)
+    keys = keys[:limit]
+
+    orders = []
+    for key in keys:
+        order_data = r.hgetall(key)
+
+
+        order_data["order_id"] = int(order_data["order_id"])
+        order_data["user_id"] = int(order_data["user_id"])
+        order_data["total_amount"] = float(order_data["total_amount"])
+        order_data["order_items"] = json.loads(order_data["order_items"])
+
+        order = Order(id=order_data["order_id"], user_id=order_data["user_id"], total_amount=order_data["total_amount"], 
+                      order_items=[OrderItem(product_id=item["product_id"], quantity=item["quantity"], unit_price=item["unit_price"]) for item in order_data["order_items"]])
+        orders.append(order)
+
+    return orders
 
 def get_highest_spending_users():
     """Get report of best selling products"""
